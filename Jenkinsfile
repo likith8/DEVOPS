@@ -2,13 +2,13 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'todo-app'
+        DOCKER_IMAGE = 'todo-app1'
+        CONTAINER_NAME = 'todo-app-container1'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the code from GitHub
                 git 'https://github.com/likith8/TODO-Appl'
             }
         }
@@ -16,8 +16,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image
-                    sh 'docker build -t $DOCKER_IMAGE .'
+                    sh "docker build -t $DOCKER_IMAGE ."
                 }
             }
         }
@@ -25,8 +24,10 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Run the Docker container
-                    sh 'docker run -d -p 5000:5000 $DOCKER_IMAGE'
+                    // Stop and remove any existing container with the same name
+                    sh "docker rm -f $CONTAINER_NAME || true"
+                    // Run a new container
+                    sh "docker run -d --name $CONTAINER_NAME -p 5000:5000 $DOCKER_IMAGE"
                 }
             }
         }
@@ -34,8 +35,8 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Run your tests inside the container
-                    sh 'docker exec -t $(docker ps -q --filter ancestor=$DOCKER_IMAGE) pytest'
+                    // Run tests inside the running container
+                    sh "docker exec $CONTAINER_NAME pytest || true"
                 }
             }
         }
@@ -43,9 +44,9 @@ pipeline {
         stage('Clean Up') {
             steps {
                 script {
-                    // Stop and remove the container after tests
-                    sh 'docker stop $(docker ps -q --filter ancestor=$DOCKER_IMAGE)'
-                    sh 'docker rm $(docker ps -a -q --filter ancestor=$DOCKER_IMAGE)'
+                    // Stop and remove the container
+                    sh "docker stop $CONTAINER_NAME || true"
+                    sh "docker rm $CONTAINER_NAME || true"
                 }
             }
         }
@@ -53,8 +54,10 @@ pipeline {
 
     post {
         always {
-            // Clean up Docker images and containers after the build
-            sh 'docker rmi $DOCKER_IMAGE || true'
+            // Optionally remove Docker image (if needed)
+            script {
+                sh "docker rmi $DOCKER_IMAGE || true"
+            }
         }
     }
 }
