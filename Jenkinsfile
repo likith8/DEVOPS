@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'todo-app1'
-        CONTAINER_NAME = 'todo-app-container1'
+        DOCKER_IMAGE = 'todo-app3'
+        CONTAINER_NAME = 'todo-app-container3'
     }
 
     stages {
