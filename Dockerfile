@@ -1,34 +1,21 @@
-# Use official slim Python image
+# Use a lightweight Python image
 FROM python:3.12-slim
 
-# Set environment variables to prevent Python from writing .pyc files and buffering logs
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (for building some Python packages, optional)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the entire app
+# Copy all files
 COPY . .
 
-# Set environment variables for Flask
-ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_ENV=production
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose Flask default port
+# Expose the port Flask runs on
 EXPOSE 5000
 
-# Command to run the Flask app
-CMD ["flask", "run"]
+# Run the Flask app
+CMD ["python", "app.py"]
