@@ -50,6 +50,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Run Docker Container') {
+    steps {
+        script {
+            sh 'docker run -d -p 5000:5000 --name todo-container todo-app3'
+        }
+    }
+}
+
     }
 
     post {
