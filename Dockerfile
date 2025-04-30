@@ -15,8 +15,7 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the .env file into the container
-COPY TODO-Appl/.env /app/.env
-
+COPY COPY .env /app/.env
 
 # Install python-dotenv
 RUN pip install python-dotenv
