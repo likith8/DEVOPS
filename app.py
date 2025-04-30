@@ -3,8 +3,6 @@ from flask_pymongo import PyMongo
 from dotenv import load_dotenv
 import os
 
-
-
 from models.user_model import UserModel
 from models.task_model import TaskModel
 
@@ -17,21 +15,26 @@ app = Flask(__name__)
 # Set the secret key using the environment variable from .env
 app.secret_key = os.getenv("SECRET_KEY")
 
-# Debugging step: Print Mongo URI
-print(f"Mongo URI: {os.getenv('MONGO_URI')}")
+# Mongo URI setup with validation
+mongo_uri = os.getenv("MONGO_URI")
+if not mongo_uri:
+    raise ValueError("MONGO_URI is not set in the .env file or environment variables.")
 
-# Mongo URI setup
-app.config["MONGO_URI"] = os.getenv("MONGO_URI")
+# Debugging step: Print Mongo URI
+print(f"Mongo URI: {mongo_uri}")
+
+app.config["MONGO_URI"] = mongo_uri
 
 # Initialize PyMongo and Models
 mongo = PyMongo(app)
-print("Collections in DB:", mongo.db.list_collection_names())
 
-# Debugging step: Check if MongoDB connection is successful
-if mongo.cx is None:
-    print("MongoDB connection failed.")
-else:
+# Debugging step: Check MongoDB connection
+try:
+    print("Collections in DB:", mongo.db.list_collection_names())
     print("MongoDB connected successfully.")
+except Exception as e:
+    print("MongoDB connection failed:", e)
+    raise
 
 user_model = UserModel(mongo)
 task_model = TaskModel(mongo)
