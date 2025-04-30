@@ -6,7 +6,7 @@ import os
 from models.user_model import UserModel
 from models.task_model import TaskModel
 
-# Load environment variables from .env
+# Load environment variables from .env file
 load_dotenv()
 
 # Create the Flask app
@@ -20,7 +20,7 @@ mongo_uri = os.getenv("MONGO_URI")
 if not mongo_uri:
     raise ValueError("MONGO_URI is not set in the .env file or environment variables.")
 
-# Debugging step: Print Mongo URI
+# Debugging step: Print Mongo URI (for debugging only, remove in production)
 print(f"Mongo URI: {mongo_uri}")
 
 app.config["MONGO_URI"] = mongo_uri

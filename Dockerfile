@@ -9,10 +9,16 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy all files
-COPY . .
+COPY . . 
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the .env file into the container
+COPY .env /app/.env
+
+# Install python-dotenv
+RUN pip install python-dotenv
 
 # Expose the port Flask runs on
 EXPOSE 5000

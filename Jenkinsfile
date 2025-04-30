@@ -4,8 +4,6 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'todo-app3'
         CONTAINER_NAME = 'todo-app-container3'
-        MONGO_URI = credentials('MONGO_URI')         // Jenkins credential ID
-        SECRET_KEY = credentials('SECRET_KEY')       // Jenkins credential ID
     }
 
     stages {
@@ -28,10 +26,9 @@ pipeline {
                 script {
                     sh "docker rm -f $CONTAINER_NAME || true"
 
+                    // Running the container without passing environment variables directly
                     sh """
                         docker run -d --name $CONTAINER_NAME \
-                         -e MONGO_URI="$MONGO_URI" \
-                         -e SECRET_KEY="$SECRET_KEY" \
                          -p 5000:5000 $DOCKER_IMAGE
                     """
                 }
