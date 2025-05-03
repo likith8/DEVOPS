@@ -23,6 +23,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
+                // Clone the repository
                 git 'https://github.com/likith8/TODO-Appl'
             }
         }
@@ -30,6 +31,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
+                    // Build Docker image with no cache to ensure fresh build
                     sh "docker build --no-cache -t $DOCKER_IMAGE ."
                 }
             }
@@ -38,7 +40,7 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Run tests inside Docker, pass .env into container
+                    // Run tests inside the Docker container and pass the .env file into the container
                     sh """
                         docker run --rm \
                         -v \$(pwd)/.env:/app/.env \
@@ -52,10 +54,10 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Stop and remove old container if exists
+                    // Stop and remove any old container with the same name (if exists)
                     sh "docker rm -f $CONTAINER_NAME || true"
 
-                    // Run the new container with resource limits
+                    // Run the new Docker container with resource limits
                     sh """
                         docker run -d --name $CONTAINER_NAME \
                         -p 5000:5000 \
@@ -70,6 +72,7 @@ pipeline {
     post {
         always {
             echo "🧹 Cleaning up container..."
+            // Ensure cleanup of the Docker container after the pipeline runs
             sh "docker rm -f $CONTAINER_NAME || true"
         }
         success {

@@ -1,9 +1,9 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_pymongo import PyMongo
 from dotenv import load_dotenv
 from datetime import datetime
 import pytz
-import os
 
 # Import models
 from models.user_model import UserModel
@@ -19,8 +19,6 @@ app.secret_key = os.getenv("SECRET_KEY")  # Ensure SECRET_KEY is set in your .en
 # MongoDB config
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")  # Set MONGO_URI in .env
 mongo = PyMongo(app)
-#from app import routes
-#__all__ = ["app", "mongo"]
 
 # Timezone setup
 app.jinja_env.globals["pytz"] = pytz
@@ -39,7 +37,7 @@ def format_user_created_at(user):
         return created_at.astimezone(timezone_kolkata).strftime("%Y-%m-%d %I:%M %p")
     return "Not available"
 
-# -------------------------
+# ------------------------- 
 # 📌 Routes
 # -------------------------
 
@@ -129,6 +127,10 @@ def dashboard():
             priority=priority,
             category=category
         )
+
+        # Debugging task creation
+        print(f"Task in DB after creation: {mongo.db.tasks.find_one({'task_text': task_text})}")
+
         return redirect(url_for("dashboard"))
 
     tasks = task_model.get_tasks(username, category=selected_category)
@@ -172,11 +174,15 @@ def dashboard():
 @app.route("/complete_task/<task_id>")
 def complete_task(task_id):
     task_model.complete_task(task_id)
+    # Debugging task completion
+    print(f"Task completed: {mongo.db.tasks.find_one({'_id': task_id})}")
     return redirect(url_for("dashboard"))
 
 @app.route("/delete_task/<task_id>")
 def delete_task(task_id):
     task_model.delete_task(task_id)
+    # Debugging task deletion
+    print(f"Task deleted: {mongo.db.tasks.find_one({'_id': task_id})}")
     return redirect(url_for("dashboard"))
 
 # -------- Subtask Management --------
@@ -188,17 +194,30 @@ def add_subtask(task_id):
         flash("Subtask cannot be empty!", "error")
         return redirect(url_for("dashboard"))
 
+    task = mongo.db.tasks.find_one({"_id": task_id})
+    if not task:
+        flash("Task not found!", "error")
+        return redirect(url_for("dashboard"))
+
     task_model.add_subtask(task_id, subtask_text)
+
+    # Debugging subtask creation
+    print(f"Subtask added to task {task_id}: {mongo.db.tasks.find_one({'_id': task_id})}")
+
     return redirect(url_for("dashboard"))
 
 @app.route("/complete_subtask/<subtask_id>")
 def complete_subtask(subtask_id):
     task_model.complete_subtask(subtask_id)
+    # Debugging subtask completion
+    print(f"Subtask completed: {mongo.db.subtasks.find_one({'_id': subtask_id})}")
     return redirect(url_for("dashboard"))
 
 @app.route("/delete_subtask/<subtask_id>")
 def delete_subtask(subtask_id):
     task_model.delete_subtask(subtask_id)
+    # Debugging subtask deletion
+    print(f"Subtask deleted: {mongo.db.subtasks.find_one({'_id': subtask_id})}")
     return redirect(url_for("dashboard"))
 
 # -------- Timezone Context --------
@@ -207,7 +226,7 @@ def delete_subtask(subtask_id):
 def inject_timezones():
     return {"timezone": pytz.timezone("Asia/Kolkata")}
 
-# -------------------------
+# ------------------------- 
 # 🚀 Run the App
 # -------------------------
 
