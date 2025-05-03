@@ -2,25 +2,25 @@
 FROM python:3.10-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
 
-# Copy all files
-COPY . . 
+# Copy only requirements first (for layer caching)
+COPY requirements.txt .
 
-# Install dependencies
+# Install all Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the .env file into the container
-COPY .env /app/.env
+# Copy the rest of the application code
+COPY . .
 
-# Install python-dotenv
-RUN pip install python-dotenv
+# Copy .env file explicitly (if needed at runtime)
+COPY .env .env
 
-# Expose the port Flask runs on
+# Expose the port Flask will run on
 EXPOSE 5000
 
 # Run the Flask app
