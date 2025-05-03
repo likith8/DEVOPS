@@ -19,6 +19,8 @@ app.secret_key = os.getenv("SECRET_KEY")  # Ensure SECRET_KEY is set in your .en
 # MongoDB config
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")  # Set MONGO_URI in .env
 mongo = PyMongo(app)
+from app import routes
+__all__ = ["app", "mongo"]
 
 # Timezone setup
 app.jinja_env.globals["pytz"] = pytz
