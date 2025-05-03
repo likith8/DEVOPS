@@ -25,11 +25,9 @@ pipeline {
             steps {
                 script {
                     sh "docker rm -f $CONTAINER_NAME || true"
-
-                    // Running the container without passing environment variables directly
                     sh """
                         docker run -d --name $CONTAINER_NAME \
-                         -p 5000:5000 $DOCKER_IMAGE
+                        -p 5000:5000 $DOCKER_IMAGE
                     """
                 }
             }
@@ -38,9 +36,16 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    sh "docker exec $CONTAINER_NAME pytest || true"
+                    sh "docker exec $CONTAINER_NAME pytest"
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Cleaning up..."
+            sh "docker rm -f $CONTAINER_NAME || true"
         }
     }
 }
