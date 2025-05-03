@@ -1,10 +1,29 @@
+# Python artifacts
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+
+# Database files
 *.db
 *.sqlite3
+
+# Virtual environments
 venv/
+env/
+
+# Git files
 .git
 .gitignore
+
+# Docker files (don't copy Dockerfile itself if not needed in image)
 Dockerfile
+.dockerignore
+
+# VS Code and editor settings
+.vscode/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db

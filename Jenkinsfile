@@ -7,6 +7,12 @@ pipeline {
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                sh "docker system prune -f || true"
+            }
+        }
+
         stage('Checkout') {
             steps {
                 git 'https://github.com/likith8/TODO-Appl'
@@ -16,8 +22,16 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Ensure Docker image is built correctly and without cache
                     sh "docker build --no-cache -t $DOCKER_IMAGE ."
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    // Run tests in a separate container
+                    sh "docker run --rm $DOCKER_IMAGE pytest || exit 1"
                 }
             }
         }
@@ -25,9 +39,9 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Clean up any previous containers
+                    // Stop and remove any running container
                     sh "docker rm -f $CONTAINER_NAME || true"
-                    // Run container with resource limits to avoid OOM (Out of Memory)
+                    // Run the app container with memory limits
                     sh """
                         docker run -d --name $CONTAINER_NAME \
                         -p 5000:5000 \
@@ -37,30 +51,18 @@ pipeline {
                 }
             }
         }
-
-        stage('Run Tests') {
-            steps {
-                script {
-                    // Run tests and ensure containers exit with proper status
-                    sh """
-                        docker exec $CONTAINER_NAME pytest || exit 1
-                    """
-                }
-            }
-        }
     }
 
     post {
         always {
             echo "Cleaning up..."
-            // Remove container after execution
             sh "docker rm -f $CONTAINER_NAME || true"
         }
         success {
-            echo "Pipeline completed successfully"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "Pipeline failed, check the logs above."
+            echo "❌ Pipeline failed. Please check logs."
         }
     }
 }
