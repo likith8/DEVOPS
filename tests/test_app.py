@@ -3,29 +3,25 @@ import sys
 import os
 from flask import session
 from bs4 import BeautifulSoup
+from bson.objectid import ObjectId
 
 # Set path to project root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import the app and db directly from app.py (since it's in the main folder)
-from app import app, db  # Importing from app.py in the root directory
-from task_model import Task, SubTask  # Import Task and SubTask from task_model.py
+# Import app and mongo
+from app import app, mongo  # Make sure mongo is defined in app.py
 
 @pytest.fixture
 def client():
-    # Configure test settings
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    
-    with app.app_context():
-        db.create_all()  # Create schema
 
     with app.test_client() as client:
         yield client
 
     with app.app_context():
-        db.drop_all()  # Clean up DB
+        mongo.db.tasks.delete_many({})
+        mongo.db.subtasks.delete_many({})
 
 def test_home_redirect(client):
     response = client.get("/")
@@ -42,7 +38,7 @@ def test_add_task_basic(client):
     assert b"Test Task" in response.data
 
 def test_add_task_with_subtasks(client):
-    response = client.post("/add", data={ 
+    response = client.post("/add", data={
         "task": "Parent Task",
         "category": "Home",
         "subtask": ["Subtask 1", "Subtask 2"]
@@ -64,37 +60,37 @@ def test_add_task_with_tags_and_priority(client):
 
 def test_delete_task(client):
     client.post("/add", data={"task": "To Delete", "category": "Misc"})
-    task = Task.query.filter_by(task="To Delete").first()
+    task = mongo.db.tasks.find_one({"task": "To Delete"})
     assert task is not None
-    response = client.get(f"/delete/{task.id}", follow_redirects=True)
+    response = client.get(f"/delete/{task['_id']}", follow_redirects=True)
     assert b"To Delete" not in response.data
 
 def test_mark_task_completed(client):
     client.post("/add", data={"task": "Complete Me", "category": "Work"})
-    task = Task.query.filter_by(task="Complete Me").first()
-    client.get(f"/complete/{task.id}", follow_redirects=True)
-    updated_task = Task.query.get(task.id)
-    assert updated_task.completed is True
+    task = mongo.db.tasks.find_one({"task": "Complete Me"})
+    client.get(f"/complete/{task['_id']}", follow_redirects=True)
+    updated_task = mongo.db.tasks.find_one({"_id": task["_id"]})
+    assert updated_task.get("completed", False) is True
 
 def test_add_subtask_to_existing(client):
     client.post("/add", data={"task": "Main Task", "category": "Work"})
-    task = Task.query.filter_by(task="Main Task").first()
-    response = client.post(f"/add_subtask/{task.id}", data={"subtask_name": "Added Subtask"}, follow_redirects=True)
+    task = mongo.db.tasks.find_one({"task": "Main Task"})
+    response = client.post(f"/add_subtask/{task['_id']}", data={"subtask_name": "Added Subtask"}, follow_redirects=True)
     assert b"Added Subtask" in response.data
 
 def test_mark_subtask_completed(client):
     client.post("/add", data={"task": "Task with Sub", "category": "Work", "subtask": ["Check Me"]})
-    task = Task.query.filter_by(task="Task with Sub").first()
-    subtask = SubTask.query.filter_by(task_id=task.id, name="Check Me").first()
-    client.get(f"/toggle_subtask/{subtask.id}", follow_redirects=True)
-    updated_sub = SubTask.query.get(subtask.id)
-    assert updated_sub.completed is True
+    task = mongo.db.tasks.find_one({"task": "Task with Sub"})
+    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "Check Me"})
+    client.get(f"/toggle_subtask/{subtask['_id']}", follow_redirects=True)
+    updated_sub = mongo.db.subtasks.find_one({"_id": subtask["_id"]})
+    assert updated_sub.get("completed", False) is True
 
 def test_delete_subtask(client):
     client.post("/add", data={"task": "Sub Delete Task", "category": "Work", "subtask": ["Temp Sub"]})
-    task = Task.query.filter_by(task="Sub Delete Task").first()
-    subtask = SubTask.query.filter_by(task_id=task.id, name="Temp Sub").first()
-    response = client.get(f"/delete_subtask/{subtask.id}", follow_redirects=True)
+    task = mongo.db.tasks.find_one({"task": "Sub Delete Task"})
+    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "Temp Sub"})
+    response = client.get(f"/delete_subtask/{subtask['_id']}", follow_redirects=True)
     assert b"Temp Sub" not in response.data
 
 def test_filter_category(client):
@@ -106,11 +102,11 @@ def test_filter_category(client):
 
 def test_completion_percentage(client):
     client.post("/add", data={"task": "Progress Task", "category": "Work", "subtask": ["1", "2", "3"]})
-    task = Task.query.filter_by(task="Progress Task").first()
-    subtask = SubTask.query.filter_by(task_id=task.id, name="1").first()
-    client.get(f"/toggle_subtask/{subtask.id}", follow_redirects=True)
-    updated_subs = SubTask.query.filter_by(task_id=task.id).all()
-    assert any(st.completed for st in updated_subs)
+    task = mongo.db.tasks.find_one({"task": "Progress Task"})
+    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "1"})
+    client.get(f"/toggle_subtask/{subtask['_id']}", follow_redirects=True)
+    updated_subs = list(mongo.db.subtasks.find({"task_id": str(task["_id"])}))
+    assert any(st.get("completed", False) for st in updated_subs)
 
 def test_invalid_task_name(client):
     response = client.post("/add", data={"task": "", "category": "Work"}, follow_redirects=True)
