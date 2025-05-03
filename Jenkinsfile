@@ -7,10 +7,17 @@ pipeline {
     }
 
     stages {
-        stage('Clean Workspace') {
+        stage('Clean Jenkins Workspace') {
             steps {
-                // Optional: cleans up dangling Docker resources
-                sh "docker system prune -f || true"
+                // Clean Jenkins workspace to free up disk space
+                cleanWs()
+            }
+        }
+
+        stage('Clean Docker Resources') {
+            steps {
+                // Optional: cleans up unused Docker resources and volumes
+                sh "docker system prune -af --volumes || true"
             }
         }
 
@@ -31,7 +38,7 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Run tests in the Docker image using the test discovery
+                    // Run tests inside Docker, pass .env into container
                     sh """
                         docker run --rm \
                         -v \$(pwd)/.env:/app/.env \
@@ -45,10 +52,10 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Ensure previous container is stopped
+                    // Stop and remove old container if exists
                     sh "docker rm -f $CONTAINER_NAME || true"
 
-                    // Run the new container
+                    // Run the new container with resource limits
                     sh """
                         docker run -d --name $CONTAINER_NAME \
                         -p 5000:5000 \
@@ -62,7 +69,7 @@ pipeline {
 
     post {
         always {
-            echo "Cleaning up..."
+            echo "🧹 Cleaning up container..."
             sh "docker rm -f $CONTAINER_NAME || true"
         }
         success {
