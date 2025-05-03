@@ -120,6 +120,7 @@ def dashboard():
                 flash("Invalid date format for end time.", "error")
                 return redirect(url_for("dashboard"))
 
+        # Store task in database
         task_model.add_task(
             username=username,
             task_text=task_text,
@@ -129,10 +130,12 @@ def dashboard():
         )
 
         # Debugging task creation
-        print(f"Task in DB after creation: {mongo.db.tasks.find_one({'task_text': task_text})}")
+        task = mongo.db.tasks.find_one({"task_text": task_text})
+        print(f"Task in DB after creation: {task}")
 
         return redirect(url_for("dashboard"))
 
+    # Fetch tasks from database
     tasks = task_model.get_tasks(username, category=selected_category)
     all_tasks = task_model.get_tasks(username)
     categories = sorted(set(task.get("category", "Others") for task in all_tasks))
@@ -175,14 +178,16 @@ def dashboard():
 def complete_task(task_id):
     task_model.complete_task(task_id)
     # Debugging task completion
-    print(f"Task completed: {mongo.db.tasks.find_one({'_id': task_id})}")
+    task = mongo.db.tasks.find_one({"_id": task_id})
+    print(f"Task completed: {task}")
     return redirect(url_for("dashboard"))
 
 @app.route("/delete_task/<task_id>")
 def delete_task(task_id):
     task_model.delete_task(task_id)
     # Debugging task deletion
-    print(f"Task deleted: {mongo.db.tasks.find_one({'_id': task_id})}")
+    task = mongo.db.tasks.find_one({"_id": task_id})
+    print(f"Task deleted: {task}")
     return redirect(url_for("dashboard"))
 
 # -------- Subtask Management --------
@@ -202,7 +207,8 @@ def add_subtask(task_id):
     task_model.add_subtask(task_id, subtask_text)
 
     # Debugging subtask creation
-    print(f"Subtask added to task {task_id}: {mongo.db.tasks.find_one({'_id': task_id})}")
+    task = mongo.db.tasks.find_one({"_id": task_id})
+    print(f"Subtask added to task {task_id}: {task}")
 
     return redirect(url_for("dashboard"))
 
@@ -210,14 +216,16 @@ def add_subtask(task_id):
 def complete_subtask(subtask_id):
     task_model.complete_subtask(subtask_id)
     # Debugging subtask completion
-    print(f"Subtask completed: {mongo.db.subtasks.find_one({'_id': subtask_id})}")
+    subtask = mongo.db.subtasks.find_one({"_id": subtask_id})
+    print(f"Subtask completed: {subtask}")
     return redirect(url_for("dashboard"))
 
 @app.route("/delete_subtask/<subtask_id>")
 def delete_subtask(subtask_id):
     task_model.delete_subtask(subtask_id)
     # Debugging subtask deletion
-    print(f"Subtask deleted: {mongo.db.subtasks.find_one({'_id': subtask_id})}")
+    subtask = mongo.db.subtasks.find_one({"_id": subtask_id})
+    print(f"Subtask deleted: {subtask}")
     return redirect(url_for("dashboard"))
 
 # -------- Timezone Context --------
