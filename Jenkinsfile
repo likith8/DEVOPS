@@ -9,6 +9,7 @@ pipeline {
     stages {
         stage('Clean Workspace') {
             steps {
+                // Optional: cleans up dangling Docker resources
                 sh "docker system prune -f || true"
             }
         }
@@ -30,8 +31,13 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Run tests in a separate container
-                    sh "docker run --rm $DOCKER_IMAGE pytest || exit 1"
+                    // Run tests in the Docker image using the test discovery
+                    sh """
+                        docker run --rm \
+                        -v \$(pwd)/.env:/app/.env \
+                        $DOCKER_IMAGE \
+                        pytest || exit 1
+                    """
                 }
             }
         }
@@ -39,9 +45,10 @@ pipeline {
         stage('Run Docker Container') {
             steps {
                 script {
-                    // Stop and remove any running container
+                    // Ensure previous container is stopped
                     sh "docker rm -f $CONTAINER_NAME || true"
-                    // Run the app container with memory limits
+
+                    // Run the new container
                     sh """
                         docker run -d --name $CONTAINER_NAME \
                         -p 5000:5000 \

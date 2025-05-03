@@ -12,18 +12,22 @@ __pycache__/
 venv/
 env/
 
-# Git files
+# Git
 .git
 .gitignore
 
-# Docker files (don't copy Dockerfile itself if not needed in image)
-Dockerfile
-.dockerignore
-
-# VS Code and editor settings
+# Editor and OS files
 .vscode/
 *.swp
-
-# OS files
 .DS_Store
 Thumbs.db
+
+# Optional: exclude test logs, coverage reports, etc.
+*.log
+.coverage
+htmlcov/
+
+# Exclude Docker cache if needed
+# node_modules/  # if using Node in frontend
+
+# Note: Keep Dockerfile and .dockerignore so Docker can access them!

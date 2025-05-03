@@ -3,6 +3,11 @@ flask-pymongo
 python-dotenv
 Werkzeug
 dnspython
+gunicorn
 pytest
 Flask-SQLAlchemy
 beautifulsoup4
+certifi
+pytz
+pytest
+
