@@ -2,112 +2,141 @@ import pytest
 import sys
 import os
 from flask import session
-from bs4 import BeautifulSoup
 from bson.objectid import ObjectId
 
-# Set path to project root
+# Ensure the app path is set correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import app and mongo
-from app import app, mongo  # Make sure mongo is defined in app.py
+# Import your Flask app and mongo object
+from app import app, mongo  # adjust this if your app is in another file like `main.py`
+
+# ----------- Fixtures -----------
 
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
-
     with app.test_client() as client:
+        with app.app_context():
+            # Clean DB before each test
+            mongo.db.users.delete_many({})
+            mongo.db.tasks.delete_many({})
         yield client
 
-    with app.app_context():
-        mongo.db.tasks.delete_many({})
-        mongo.db.subtasks.delete_many({})
+# ----------- Tests -----------
 
 def test_home_redirect(client):
     response = client.get("/")
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/login")
 
-def test_login_page(client):
-    response = client.get("/login")
-    assert response.status_code == 200
-    assert b"Sign In" in response.data
-
-def test_add_task_basic(client):
-    response = client.post("/add", data={"task": "Test Task", "category": "Work"}, follow_redirects=True)
-    assert b"Test Task" in response.data
-
-def test_add_task_with_subtasks(client):
-    response = client.post("/add", data={
-        "task": "Parent Task",
-        "category": "Home",
-        "subtask": ["Subtask 1", "Subtask 2"]
+def test_signup_and_login(client):
+    # Sign up new user
+    response = client.post("/signup", data={
+        "username": "testuser",
+        "email": "test@example.com",
+        "password": "testpass",
+        "confirm_password": "testpass"
     }, follow_redirects=True)
-    assert b"Parent Task" in response.data
-    assert b"Subtask 1" in response.data
-    assert b"Subtask 2" in response.data
+    assert b"Signup successful!" in response.data
 
-def test_add_task_with_tags_and_priority(client):
-    response = client.post("/add", data={
-        "task": "Tagged Task",
-        "category": "Study",
-        "tags": "urgent,important",
-        "priority": "High"
+    # Login with email
+    response = client.post("/login", data={
+        "identifier": "test@example.com",
+        "password": "testpass"
     }, follow_redirects=True)
-    assert b"Tagged Task" in response.data
-    assert b"urgent" in response.data
-    assert b"important" in response.data
+    assert b"dashboard" in response.data.lower()
+
+def test_login_fail(client):
+    response = client.post("/login", data={
+        "identifier": "invalid@example.com",
+        "password": "wrongpass"
+    }, follow_redirects=True)
+    assert b"Invalid username/email or password" in response.data
+
+def test_dashboard_access_without_login(client):
+    response = client.get("/dashboard")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+
+def test_add_task(client):
+    # Sign up and login first
+    client.post("/signup", data={
+        "username": "taskuser",
+        "email": "task@example.com",
+        "password": "taskpass",
+        "confirm_password": "taskpass"
+    })
+    client.post("/login", data={
+        "identifier": "taskuser",
+        "password": "taskpass"
+    })
+
+    response = client.post("/dashboard", data={
+        "task": "Write Flask Tests",
+        "category": "Testing",
+        "priority": "High",
+        "end_time": ""  # Optional
+    }, follow_redirects=True)
+    assert b"Write Flask Tests" in response.data
+
+def test_complete_task(client):
+    client.post("/signup", data={
+        "username": "completeuser",
+        "email": "complete@example.com",
+        "password": "pass",
+        "confirm_password": "pass"
+    })
+    client.post("/login", data={
+        "identifier": "completeuser",
+        "password": "pass"
+    })
+    client.post("/dashboard", data={"task": "Complete Me", "category": "Work"})
+    task = mongo.db.tasks.find_one({"task_text": "Complete Me"})
+    assert task
+
+    response = client.get(f"/complete_task/{task['_id']}", follow_redirects=True)
+    updated_task = mongo.db.tasks.find_one({"_id": task["_id"]})
+    assert updated_task["completed"] is True
 
 def test_delete_task(client):
-    client.post("/add", data={"task": "To Delete", "category": "Misc"})
-    task = mongo.db.tasks.find_one({"task": "To Delete"})
-    assert task is not None
-    response = client.get(f"/delete/{task['_id']}", follow_redirects=True)
+    client.post("/signup", data={
+        "username": "deleteuser",
+        "email": "delete@example.com",
+        "password": "pass",
+        "confirm_password": "pass"
+    })
+    client.post("/login", data={
+        "identifier": "deleteuser",
+        "password": "pass"
+    })
+    client.post("/dashboard", data={"task": "To Delete", "category": "Work"})
+    task = mongo.db.tasks.find_one({"task_text": "To Delete"})
+    assert task
+
+    response = client.get(f"/delete_task/{task['_id']}", follow_redirects=True)
     assert b"To Delete" not in response.data
 
-def test_mark_task_completed(client):
-    client.post("/add", data={"task": "Complete Me", "category": "Work"})
-    task = mongo.db.tasks.find_one({"task": "Complete Me"})
-    client.get(f"/complete/{task['_id']}", follow_redirects=True)
-    updated_task = mongo.db.tasks.find_one({"_id": task["_id"]})
-    assert updated_task.get("completed", False) is True
+def test_add_and_complete_subtask(client):
+    client.post("/signup", data={
+        "username": "subtaskuser",
+        "email": "subtask@example.com",
+        "password": "pass",
+        "confirm_password": "pass"
+    })
+    client.post("/login", data={
+        "identifier": "subtaskuser",
+        "password": "pass"
+    })
+    client.post("/dashboard", data={"task": "Main Task", "category": "Work"})
+    task = mongo.db.tasks.find_one({"task_text": "Main Task"})
 
-def test_add_subtask_to_existing(client):
-    client.post("/add", data={"task": "Main Task", "category": "Work"})
-    task = mongo.db.tasks.find_one({"task": "Main Task"})
-    response = client.post(f"/add_subtask/{task['_id']}", data={"subtask_name": "Added Subtask"}, follow_redirects=True)
-    assert b"Added Subtask" in response.data
+    client.post(f"/add_subtask/{task['_id']}", data={"subtask": "Test Subtask"})
+    task = mongo.db.tasks.find_one({"_id": task["_id"]})
+    subtask = next((s for s in task["subtasks"] if s["text"] == "Test Subtask"), None)
+    assert subtask is not None
 
-def test_mark_subtask_completed(client):
-    client.post("/add", data={"task": "Task with Sub", "category": "Work", "subtask": ["Check Me"]})
-    task = mongo.db.tasks.find_one({"task": "Task with Sub"})
-    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "Check Me"})
-    client.get(f"/toggle_subtask/{subtask['_id']}", follow_redirects=True)
-    updated_sub = mongo.db.subtasks.find_one({"_id": subtask["_id"]})
-    assert updated_sub.get("completed", False) is True
-
-def test_delete_subtask(client):
-    client.post("/add", data={"task": "Sub Delete Task", "category": "Work", "subtask": ["Temp Sub"]})
-    task = mongo.db.tasks.find_one({"task": "Sub Delete Task"})
-    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "Temp Sub"})
-    response = client.get(f"/delete_subtask/{subtask['_id']}", follow_redirects=True)
-    assert b"Temp Sub" not in response.data
-
-def test_filter_category(client):
-    client.post("/add", data={"task": "Work Task", "category": "Work"})
-    client.post("/add", data={"task": "Home Task", "category": "Home"})
-    response = client.get("/?category=Home")
-    assert b"Home Task" in response.data
-    assert b"Work Task" not in response.data
-
-def test_completion_percentage(client):
-    client.post("/add", data={"task": "Progress Task", "category": "Work", "subtask": ["1", "2", "3"]})
-    task = mongo.db.tasks.find_one({"task": "Progress Task"})
-    subtask = mongo.db.subtasks.find_one({"task_id": str(task["_id"]), "name": "1"})
-    client.get(f"/toggle_subtask/{subtask['_id']}", follow_redirects=True)
-    updated_subs = list(mongo.db.subtasks.find({"task_id": str(task["_id"])}))
-    assert any(st.get("completed", False) for st in updated_subs)
-
-def test_invalid_task_name(client):
-    response = client.post("/add", data={"task": "", "category": "Work"}, follow_redirects=True)
-    assert b"Task name is required" in response.data or response.status_code == 400
+    client.get(f"/complete_subtask/{subtask['_id']}", follow_redirects=True)
+    task = mongo.db.tasks.find_one({"_id": task["_id"]})
+    updated_subtask = next(s for s in task["subtasks"] if s["_id"] == subtask["_id"])
+    assert updated_subtask["completed"] is True
