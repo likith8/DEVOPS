@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = 'flask-todo-app'
+        CONTAINER_NAME = 'flask-todo-container'
+    }
+
     stages {
         stage('Clone Repository') {
             steps {
@@ -11,7 +16,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build('flask-todo-app')
+                    dockerImage = docker.build("${IMAGE_NAME}")
                 }
             }
         }
@@ -19,24 +24,28 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
-                    // Pass the .env file to the container by mounting it
-                    dockerImage.run("-p 5000:5000 --env-file .env")
+                    // Stop and remove any existing container with the same name
+                    sh "docker rm -f ${CONTAINER_NAME} || true"
+
+                    // Run the container with specified name and .env file
+                    sh "docker run -d --name ${CONTAINER_NAME} -p 5000:5000 --env-file .env ${IMAGE_NAME}"
                 }
             }
         }
 
         stage('Test (Optional)') {
             steps {
-                // If you have tests
-                sh 'docker exec $(docker ps -q -f ancestor=flask-todo-app) pytest tests/'
+                script {
+                    // Run pytest inside the running container
+                    sh "docker exec ${CONTAINER_NAME} pytest tests/"
+                }
             }
         }
     }
 
     post {
         always {
-            echo "Cleaning up Docker containers..."
-            sh 'docker ps -aq --filter "ancestor=flask-todo-app" | xargs -r docker stop | xargs -r docker rm'
+            echo "Container and image are preserved. No cleanup is performed."
         }
     }
 }
