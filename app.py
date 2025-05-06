@@ -1,70 +1,60 @@
-import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_pymongo import PyMongo
 from dotenv import load_dotenv
-from datetime import datetime
-import pytz
+import os
 
-# Import models
 from models.user_model import UserModel
 from models.task_model import TaskModel
 
-# Load environment variables
+# Load environment variables from .env
 load_dotenv()
 
-# Initialize Flask app
+# Create the Flask app
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY")  # Ensure SECRET_KEY is set in your .env file
 
-# MongoDB config
-app.config["MONGO_URI"] = os.getenv("MONGO_URI")  # Set MONGO_URI in .env
+# Set the secret key using the environment variable from .env
+app.secret_key = os.getenv("SECRET_KEY")
+
+# Debugging step: Print Mongo URI
+print(f"Mongo URI: {os.getenv('MONGO_URI')}")
+
+# Mongo URI setup
+app.config["MONGO_URI"] = os.getenv("MONGO_URI")
+
+# Initialize PyMongo and Models
 mongo = PyMongo(app)
+print("Collections in DB:", mongo.db.list_collection_names())
 
-# Timezone setup
-app.jinja_env.globals["pytz"] = pytz
+# Debugging step: Check if MongoDB connection is successful
+if mongo.cx is None:
+    print("MongoDB connection failed.")
+else:
+    print("MongoDB connected successfully.")
 
-# Initialize models
 user_model = UserModel(mongo)
 task_model = TaskModel(mongo)
-
-# Format user's created_at field for display
-def format_user_created_at(user):
-    timezone_kolkata = pytz.timezone("Asia/Kolkata")
-    created_at = user.get("created_at")
-    if created_at:
-        if created_at.tzinfo is None:
-            created_at = pytz.utc.localize(created_at)
-        return created_at.astimezone(timezone_kolkata).strftime("%Y-%m-%d %I:%M %p")
-    return "Not available"
-
-# ------------------------- 
-# 📌 Routes
-# -------------------------
 
 @app.route("/")
 def home():
     return redirect(url_for("login"))
 
-# -------- User Authentication --------
-
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        username = request.form["username"].strip().lower()
-        email = request.form["email"].strip().lower()
+        username = request.form["username"]
         password = request.form["password"]
         confirm_password = request.form["confirm_password"]
 
         if password != confirm_password:
-            flash("Passwords do not match!", "error")
+            flash("Passwords do not match!")
             return redirect(url_for("signup"))
 
-        if user_model.find_by_email(email):
-            flash("Email already exists!", "error")
+        if user_model.find_by_username(username):
+            flash("Username already exists!")
             return redirect(url_for("signup"))
 
-        user_model.create_user(username, email, password)
-        flash("Signup successful! Please log in.", "success")
+        user_model.create_user(username, password)
+        flash("Signup successful! Please login.")
         return redirect(url_for("login"))
 
     return render_template("signup.html")
@@ -72,171 +62,50 @@ def signup():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        identifier = request.form["identifier"].strip().lower()
+        username = request.form["username"]
         password = request.form["password"]
 
-        user = None
-        if "@" in identifier:
-            user = user_model.find_by_email(identifier.lower())
-        else:
-            user = user_model.find_by_username(identifier.lower())
-
-        if user and user_model.verify_user(identifier, password):
-            session["user"] = user["username"]
+        if user_model.verify_user(username, password):
+            session["user"] = username
             return redirect(url_for("dashboard"))
         else:
-            flash("Invalid username/email or password", "error")
+            error = "Invalid username or password"
+            return render_template("login.html", error=error)
 
     return render_template("login.html")
 
 @app.route("/logout")
 def logout():
     session.pop("user", None)
-    flash("You have been logged out.", "info")
+    flash("You have been logged out.")
     return redirect(url_for("login"))
 
-# -------- Dashboard --------
-
-@app.route("/dashboard", methods=["GET", "POST"])
+@app.route("/dashboard")
 def dashboard():
     if "user" not in session:
         return redirect(url_for("login"))
 
-    username = session["user"]
-    selected_category = request.args.get("category")
-    timezone_kolkata = pytz.timezone("Asia/Kolkata")
-
-    if request.method == "POST":
-        task_text = request.form["task"].strip()
-        end_time_input = request.form.get("end_time")
-        priority = request.form.get("priority", "Medium")
-        category = request.form.get("category", "Others")
-
-        end_time = None
-        if end_time_input:
-            try:
-                end_time = timezone_kolkata.localize(datetime.strptime(end_time_input, "%Y-%m-%dT%H:%M"))
-            except ValueError:
-                flash("Invalid date format for end time.", "error")
-                return redirect(url_for("dashboard"))
-
-        # Store task in database
-        task_model.add_task(
-            username=username,
-            task_text=task_text,
-            end_time=end_time,
-            priority=priority,
-            category=category
-        )
-
-        # Debugging task creation
-        task = mongo.db.tasks.find_one({"task_text": task_text})
-        print(f"Task in DB after creation: {task}")
-
-        return redirect(url_for("dashboard"))
-
-    # Fetch tasks from database
-    tasks = task_model.get_tasks(username, category=selected_category)
-    all_tasks = task_model.get_tasks(username)
-    categories = sorted(set(task.get("category", "Others") for task in all_tasks))
+    tasks = task_model.get_tasks(session["user"])
     completion = task_model.get_completion_percentage(tasks)
 
-    category_completion = {}
-    for cat in categories:
-        cat_tasks = [task for task in all_tasks if task.get("category") == cat]
-        completed = len([task for task in cat_tasks if task.get("completed")])
-        total = len(cat_tasks)
-        percent = round((completed / total) * 100, 2) if total > 0 else 0
-        category_completion[cat] = percent
+    return render_template("dashboard.html", tasks=tasks, completion_percentage=completion)
 
-    for task in tasks:
-        for time_field in ["start_time", "end_time"]:
-            dt = task.get(time_field)
-            if dt:
-                if dt.tzinfo is None:
-                    dt = pytz.utc.localize(dt)
-                task[f"{time_field}_str"] = dt.astimezone(timezone_kolkata).strftime("%Y-%m-%d %I:%M %p")
-            else:
-                task[f"{time_field}_str"] = "Not set" if time_field != "start_time" else "Not available"
+@app.route("/add", methods=["POST"])
+def add_task():
+    if "user" in session:
+        task_text = request.form["task"]
+        task_model.add_task(session["user"], task_text)
+    return redirect(url_for("dashboard"))
 
-    user = user_model.find_by_username(username)
-    created_at_str = format_user_created_at(user)
-
-    return render_template(
-        "dashboard.html",
-        tasks=tasks,
-        categories=categories,
-        selected_category=selected_category,
-        completion_percentage=completion,
-        category_completion=category_completion,
-        created_at=created_at_str
-    )
-
-# -------- Task Management --------
-
-@app.route("/complete_task/<task_id>")
+@app.route("/complete/<task_id>")
 def complete_task(task_id):
     task_model.complete_task(task_id)
-    # Debugging task completion
-    task = mongo.db.tasks.find_one({"_id": task_id})
-    print(f"Task completed: {task}")
     return redirect(url_for("dashboard"))
 
-@app.route("/delete_task/<task_id>")
+@app.route("/delete/<task_id>")
 def delete_task(task_id):
     task_model.delete_task(task_id)
-    # Debugging task deletion
-    task = mongo.db.tasks.find_one({"_id": task_id})
-    print(f"Task deleted: {task}")
     return redirect(url_for("dashboard"))
-
-# -------- Subtask Management --------
-
-@app.route("/add_subtask/<task_id>", methods=["POST"])
-def add_subtask(task_id):
-    subtask_text = request.form.get("subtask", "").strip()
-    if not subtask_text:
-        flash("Subtask cannot be empty!", "error")
-        return redirect(url_for("dashboard"))
-
-    task = mongo.db.tasks.find_one({"_id": task_id})
-    if not task:
-        flash("Task not found!", "error")
-        return redirect(url_for("dashboard"))
-
-    task_model.add_subtask(task_id, subtask_text)
-
-    # Debugging subtask creation
-    task = mongo.db.tasks.find_one({"_id": task_id})
-    print(f"Subtask added to task {task_id}: {task}")
-
-    return redirect(url_for("dashboard"))
-
-@app.route("/complete_subtask/<subtask_id>")
-def complete_subtask(subtask_id):
-    task_model.complete_subtask(subtask_id)
-    # Debugging subtask completion
-    subtask = mongo.db.subtasks.find_one({"_id": subtask_id})
-    print(f"Subtask completed: {subtask}")
-    return redirect(url_for("dashboard"))
-
-@app.route("/delete_subtask/<subtask_id>")
-def delete_subtask(subtask_id):
-    task_model.delete_subtask(subtask_id)
-    # Debugging subtask deletion
-    subtask = mongo.db.subtasks.find_one({"_id": subtask_id})
-    print(f"Subtask deleted: {subtask}")
-    return redirect(url_for("dashboard"))
-
-# -------- Timezone Context --------
-
-@app.context_processor
-def inject_timezones():
-    return {"timezone": pytz.timezone("Asia/Kolkata")}
-
-# ------------------------- 
-# 🚀 Run the App
-# -------------------------
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
