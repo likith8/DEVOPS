@@ -6,38 +6,29 @@ import os
 from models.user_model import UserModel
 from models.task_model import TaskModel
 
-# Load environment variables from .env
+# Load environment variables from .env file
 load_dotenv()
 
-# Create the Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Set the secret key using the environment variable from .env
+# Secret key for session
 app.secret_key = os.getenv("SECRET_KEY")
 
-# Debugging step: Print Mongo URI
-print(f"Mongo URI: {os.getenv('MONGO_URI')}")
-
-# Mongo URI setup
+# MongoDB configuration
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 
-# Initialize PyMongo and Models
+# Initialize PyMongo and models
 mongo = PyMongo(app)
-print("Collections in DB:", mongo.db.list_collection_names())
-
-# Debugging step: Check if MongoDB connection is successful
-if mongo.cx is None:
-    print("MongoDB connection failed.")
-else:
-    print("MongoDB connected successfully.")
-
 user_model = UserModel(mongo)
 task_model = TaskModel(mongo)
 
+# Home route redirects to login
 @app.route("/")
 def home():
     return redirect(url_for("login"))
 
+# Signup route
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
@@ -59,6 +50,7 @@ def signup():
 
     return render_template("signup.html")
 
+# Login route
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -74,12 +66,14 @@ def login():
 
     return render_template("login.html")
 
+# Logout route
 @app.route("/logout")
 def logout():
     session.pop("user", None)
     flash("You have been logged out.")
     return redirect(url_for("login"))
 
+# Dashboard route
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
@@ -90,22 +84,31 @@ def dashboard():
 
     return render_template("dashboard.html", tasks=tasks, completion_percentage=completion)
 
+# Add task route
 @app.route("/add", methods=["POST"])
 def add_task():
     if "user" in session:
         task_text = request.form["task"]
-        task_model.add_task(session["user"], task_text)
+        start_time = request.form.get("start_time") or None
+        end_time = request.form.get("end_time") or None
+        
+        # Ensure the datetime values are in the correct format (if needed, add additional processing)
+        task_model.add_task(session["user"], task_text, start_time, end_time)
+    
     return redirect(url_for("dashboard"))
 
+# Mark task as complete
 @app.route("/complete/<task_id>")
 def complete_task(task_id):
     task_model.complete_task(task_id)
     return redirect(url_for("dashboard"))
 
+# Delete task
 @app.route("/delete/<task_id>")
 def delete_task(task_id):
     task_model.delete_task(task_id)
     return redirect(url_for("dashboard"))
 
+# Run the app
 if __name__ == "__main__":
     app.run(debug=True)

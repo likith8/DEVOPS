@@ -1,14 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="dashboard-container text-center">
-    <h2 class="mb-4">Welcome, {{ session['user'] }}</h2>
+<div class="container mt-5">
+    <h2>Welcome, {{ session['user'] }}</h2>
 
-    <!-- Progress Bar -->
     {% if completion_percentage is defined %}
-        <div class="progress mb-4">
+        <div class="progress mb-3">
             <div class="progress-bar" role="progressbar"
-                 style="width: {{ completion_percentage }}%;"
+                 style="width: {{ completion_percentage }}%;" 
                  aria-valuenow="{{ completion_percentage }}"
                  aria-valuemin="0" aria-valuemax="100">
                 {{ completion_percentage }}% Completed
@@ -16,17 +15,39 @@
         </div>
     {% endif %}
 
-    <!-- Task Input -->
-    <form method="POST" action="{{ url_for('add_task') }}" class="input-group mb-4">
-        <input type="text" name="task" class="form-control" placeholder="Enter a new task" required>
-        <button type="submit" class="btn btn-primary">Add</button>
+    <!-- Add Task Form -->
+    <form method="POST" action="{{ url_for('add_task') }}" class="mb-4">
+        <div class="form-group mb-2">
+            <input type="text" name="task" class="form-control" placeholder="Enter a task" required>
+        </div>
+        <div class="form-row mb-2">
+            <div class="col">
+                <input type="datetime-local" name="start_time" class="form-control" placeholder="Start Time" required>
+            </div>
+            <div class="col">
+                <input type="datetime-local" name="end_time" class="form-control" placeholder="End Time" required>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Task</button>
     </form>
 
     <!-- Task List -->
     <ul class="list-group">
         {% for task in tasks %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span class="{% if task.completed %}text-decoration-line-through{% endif %}">{{ task.task }}</span>
+            <div>
+                <strong class="{% if task.completed %}text-decoration-line-through{% endif %}">
+                    {{ task.task }}
+                </strong><br>
+                <small class="text-muted">
+                    {% if task.start_date %}
+                        Start: {{ task.start_date.strftime('%Y-%m-%d %H:%M') }}
+                    {% endif %}
+                    {% if task.end_date %}
+                        | End: {{ task.end_date.strftime('%Y-%m-%d %H:%M') }}
+                    {% endif %}
+                </small>
+            </div>
             <div>
                 {% if not task.completed %}
                     <a href="{{ url_for('complete_task', task_id=task._id) }}" class="btn btn-success btn-sm">Complete</a>
