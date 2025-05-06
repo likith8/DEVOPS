@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        FLASK_ENV = 'production'
-        MONGO_URI = credentials('mongo-uri')  // Store your Mongo URI in Jenkins Credentials
-        SECRET_KEY = credentials('flask-secret-key')  // Store your secret key safely
-    }
-
     stages {
         stage('Clone Repository') {
             steps {
@@ -25,14 +19,15 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
-                    dockerImage.run("-e FLASK_ENV=${FLASK_ENV} -e MONGO_URI=${MONGO_URI} -e SECRET_KEY=${SECRET_KEY} -p 5000:5000")
+                    // Pass the .env file to the container by mounting it
+                    dockerImage.run("-p 5000:5000 --env-file .env")
                 }
             }
         }
 
         stage('Test (Optional)') {
             steps {
-                // Only if you have unit tests
+                // If you have tests
                 sh 'docker exec $(docker ps -q -f ancestor=flask-todo-app) pytest tests/'
             }
         }
@@ -40,7 +35,7 @@ pipeline {
 
     post {
         always {
-            echo "Cleaning up..."
+            echo "Cleaning up Docker containers..."
             sh 'docker ps -aq --filter "ancestor=flask-todo-app" | xargs -r docker stop | xargs -r docker rm'
         }
     }
